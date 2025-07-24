@@ -55,3 +55,8 @@ export async function GET(request: Request) {
     );
   }
 } 
+
+export async function POST(request: Request) {
+  // TODO: Implement create/overwrite CCTV logic
+  return NextResponse.json({ success: true, message: 'CCTV created/overwritten (stub)' });
+} 

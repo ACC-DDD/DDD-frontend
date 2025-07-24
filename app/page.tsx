@@ -27,7 +27,7 @@ interface Location {
 // Fetch CCTV locations from backend
 async function fetchCCTVLocations(): Promise<Location[]> {
   try {
-    const response = await fetch('/api/cctv-locations')
+    const response = await fetch('/api/cctvs')
     if (!response.ok) {
       throw new Error('Failed to fetch CCTV locations')
     }

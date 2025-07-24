@@ -54,7 +54,7 @@ export const getCCTVStream = async (id: number): Promise<string> => {
     }
 
     const data = await response.json();
-    return data.cctvUrl;
+    return data.streamUrl;
   } catch (error) {
     console.error('Error fetching CCTV stream:', error);
     throw error;
@@ -64,7 +64,7 @@ export const getCCTVStream = async (id: number): Promise<string> => {
 export const getCCTVData = async (id: number): Promise<Blob> => {
   try {
     const response = await fetch(`/api/cctvs/${id}/stream`, {
-      method: 'POST',
+      method: 'GET',
       headers: {
         'Authorization': `Bearer ${getAccessToken()}`,
       },

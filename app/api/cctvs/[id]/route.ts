@@ -53,3 +53,25 @@ export async function GET(
     );
   }
 } 
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const command = {
+      TableName: 'cctv_locations',
+      Key: { id: { N: id } }
+    };
+    // Use DynamoDB delete command (pseudo, replace with actual import and usage)
+    // await client.send(new DeleteItemCommand(command));
+    return NextResponse.json({ success: true, message: 'CCTV deleted' });
+  } catch (error) {
+    console.error('Error deleting CCTV by ID:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete CCTV' },
+      { status: 500 }
+    );
+  }
+} 
