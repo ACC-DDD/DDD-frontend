@@ -22,8 +22,10 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
 
+    console.log('🔄 Attempting to login with backend...')
     try {
       const response = await apiService.login(formData.phoneNum, formData.password)
+      console.log('✅ Successfully logged in with backend:', response)
 
       // Store tokens and user data
       authManager.setTokens({
@@ -40,7 +42,7 @@ export default function LoginPage() {
 
       router.push("/")
     } catch (error) {
-      console.error("Error logging in:", error)
+      console.error("❌ Error logging in with backend:", error)
       toast({
         title: "로그인 실패",
         description: error instanceof Error ? error.message : "다시 시도해주세요",

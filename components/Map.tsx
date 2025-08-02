@@ -61,65 +61,23 @@ function MapController({ center }: { center?: [number, number] }) {
   return null
 }
 
-// Disaster simulator component
-function DisasterSimulator() {
-  const map = useMap()
-  const [isDisasterMode, setIsDisasterMode] = useState(false)
+// Disaster simulator function (moved to parent component)
+function simulateDisaster(locations: Location[]) {
+  if (locations.length > 0) {
+    const disasterIndex = Math.floor(Math.random() * locations.length)
+    
+    // Update the global state with all locations
+    const updatedLocations = locations.map((loc, index) => ({
+      ...loc,
+      detection: index === disasterIndex ? "disaster" : "normal"
+    }))
 
-  const simulateDisaster = () => {
-    // Get all current markers
-    const locations: Location[] = []
-    map.eachLayer((layer: L.Layer) => {
-      if (layer instanceof L.Marker) {
-        const latLng = layer.getLatLng()
-        locations.push({
-          id: Math.random(),
-          name: "현재 위치",
-          address: "",
-          lat: latLng.lat,
-          lng: latLng.lng,
-          detection: isDisasterMode ? "normal" : "disaster",
-          cctvUrl: ""
-        })
-      }
-    })
-
-    if (locations.length > 0) {
-      const disasterIndex = Math.floor(Math.random() * locations.length)
-      const disasterLocation = locations[disasterIndex]
-
-      // Update the global state with all locations
-      const updatedLocations = locations.map((loc, index) => ({
-        ...loc,
-        detection: index === disasterIndex ? (isDisasterMode ? "normal" : "disaster") : "normal"
-      }))
-
-      window.dispatchEvent(
-        new CustomEvent("disasterDetected", {
-          detail: { locations: updatedLocations },
-        }),
-      )
-
-      // Pan to the disaster location
-      map.flyTo([disasterLocation.lat, disasterLocation.lng], 13, { duration: 2 })
-      
-      // Toggle the disaster mode
-      setIsDisasterMode(!isDisasterMode)
-    }
+    window.dispatchEvent(
+      new CustomEvent("disasterDetected", {
+        detail: { locations: updatedLocations },
+      }),
+    )
   }
-
-  return (
-    <div className="absolute z-[1000] top-4 left-4">
-      <Button 
-        variant={isDisasterMode ? "outline" : "destructive"} 
-        onClick={simulateDisaster} 
-        className="flex items-center gap-2"
-      >
-        <AlertTriangle size={16} />
-        {isDisasterMode ? "재난 해제" : "재난 시뮬레이션"}
-      </Button>
-    </div>
-  )
 }
 
 export default function Map({ locations, onSelectCamera, center }: MapProps) {
@@ -156,7 +114,6 @@ export default function Map({ locations, onSelectCamera, center }: MapProps) {
       ))}
 
       <MapController center={center} />
-      <DisasterSimulator />
     </MapContainer>
   )
 } 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Camera, AlertTriangle, User, LogOut } from "lucide-react"
+import { Camera, User, LogOut } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -28,8 +28,10 @@ interface Location {
 
 // Fetch CCTV locations from backend
 async function fetchCCTVLocations(): Promise<Location[]> {
+  console.log('🔄 Attempting to fetch CCTV data from backend...')
   try {
     const response = await apiService.getAllCCTVs()
+    console.log('✅ Successfully fetched CCTV data from backend:', response)
     return response.map((item: any) => ({
       id: item.id,
       name: item.name,
@@ -40,8 +42,56 @@ async function fetchCCTVLocations(): Promise<Location[]> {
       cctvUrl: item.cctvUrl
     }))
   } catch (error) {
-    console.error('Error fetching CCTV locations:', error)
-    return [] // Return empty array instead of sample data
+    console.error('❌ Error fetching CCTV locations from backend:', error)
+    console.log('🔄 Using sample data as fallback...')
+    // Return sample data for testing when backend is not available
+    return [
+      {
+        id: 1,
+        name: "강남역 CCTV (샘플)",
+        address: "서울특별시 강남구 강남대로 396",
+        lat: 37.4979,
+        lng: 127.0276,
+        detection: "normal",
+        cctvUrl: "/placeholder.jpg"
+      },
+      {
+        id: 2,
+        name: "홍대입구역 CCTV (샘플)",
+        address: "서울특별시 마포구 양화로 160",
+        lat: 37.5563,
+        lng: 126.9236,
+        detection: "normal",
+        cctvUrl: "/placeholder.jpg"
+      },
+      {
+        id: 3,
+        name: "명동역 CCTV (샘플)",
+        address: "서울특별시 중구 명동길 26",
+        lat: 37.5636,
+        lng: 126.9834,
+        detection: "disaster",
+        cctvUrl: "/placeholder.jpg"
+      },
+      {
+        id: 4,
+        name: "이태원역 CCTV (샘플)",
+        address: "서울특별시 용산구 이태원로 177",
+        lat: 37.5345,
+        lng: 126.9945,
+        detection: "normal",
+        cctvUrl: "/placeholder.jpg"
+      },
+      {
+        id: 5,
+        name: "잠실역 CCTV (샘플)",
+        address: "서울특별시 송파구 올림픽로 240",
+        lat: 37.5133,
+        lng: 127.1000,
+        detection: "normal",
+        cctvUrl: "/placeholder.jpg"
+      }
+    ]
   }
 }
 
@@ -113,15 +163,7 @@ export default function DisasterDetectionPage() {
     }
   }
 
-  const handleDisasterSimulation = () => {
-    try {
-      router.push('/disaster-simulation')
-    } catch (error) {
-      console.error('Navigation error:', error)
-      // Fallback to window.location if router.push fails
-      window.location.href = '/disaster-simulation'
-    }
-  }
+
 
   return (
     <div className="min-h-screen w-full bg-gray-100 p-8">
@@ -130,10 +172,8 @@ export default function DisasterDetectionPage() {
           <Button
             variant="destructive"
             className="flex items-center gap-2"
-            // onClick={handleDisasterSimulation}
             onClick={() => router.push('/disaster-simulation')}
           >
-            {/* <AlertTriangle className="h-4 w-4" /> */}
             재난 시뮬레이션
           </Button>
         </div>
