@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import { apiService } from "./services/api"
+import { authManager } from "./utils/auth"
 // import {
 //   DropdownMenu,
 //   DropdownMenuContent,
@@ -27,18 +29,14 @@ interface Location {
 // Fetch CCTV locations from backend
 async function fetchCCTVLocations(): Promise<Location[]> {
   try {
-    const response = await fetch('/api/cctvs')
-    if (!response.ok) {
-      throw new Error('Failed to fetch CCTV locations')
-    }
-    const data = await response.json()
-    return data.map((item: any) => ({
+    const response = await apiService.getAllCCTVs()
+    return response.map((item: any) => ({
       id: item.id,
       name: item.name,
       address: item.address,
       lat: parseFloat(item.lat),
       lng: parseFloat(item.lng),
-      detection: item.detection === "disaster" ? "disaster" : "normal",
+      detection: item.status === "disaster" ? "disaster" : "normal",
       cctvUrl: item.cctvUrl
     }))
   } catch (error) {
@@ -70,19 +68,17 @@ export default function DisasterDetectionPage() {
   }
 
   useEffect(() => {
-    const userData = localStorage.getItem('userData')
-    if (userData) {
-      try {
-        const data = JSON.parse(userData)
-        setIsLoggedIn(true)
-        if (data.lat && data.lng) {
-          setUserLocation({ 
-            lat: parseFloat(data.lat), 
-            lng: parseFloat(data.lng) 
-          })
-        }
-      } catch (error) {
-        console.error('Error parsing user data:', error)
+    // Check authentication status
+    const isAuthenticated = authManager.isAuthenticated()
+    setIsLoggedIn(isAuthenticated)
+    
+    if (isAuthenticated) {
+      const userData = authManager.getUserData()
+      if (userData && userData.lat && userData.lng) {
+        setUserLocation({ 
+          lat: userData.lat, 
+          lng: userData.lng 
+        })
       }
     }
 
@@ -99,14 +95,22 @@ export default function DisasterDetectionPage() {
     }
   }, [])
 
-  const handleSignOut = () => {
-    localStorage.removeItem('userData')
-    setIsLoggedIn(false)
-    toast({
-      title: "로그아웃 완료",
-      description: "로그아웃되었습니다.",
-    })
-    router.push("/")
+  const handleSignOut = async () => {
+    try {
+      await authManager.logout()
+      setIsLoggedIn(false)
+      toast({
+        title: "로그아웃 완료",
+        description: "로그아웃되었습니다.",
+      })
+      router.push("/")
+    } catch (error) {
+      console.error('Error during logout:', error)
+      // Still clear local state even if API call fails
+      authManager.clearAuth()
+      setIsLoggedIn(false)
+      router.push("/")
+    }
   }
 
   const handleDisasterSimulation = () => {

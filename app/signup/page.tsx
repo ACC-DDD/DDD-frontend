@@ -1,19 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { LocationOption } from "../utils/locations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useLocations } from "../hooks/useLocations"
 import { useToast } from "@/components/ui/use-toast"
+import { apiService } from "../services/api"
+import { authManager } from "../utils/auth"
 
 export default function SignUpPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { locations, loading, error } = useLocations()
+  const [districts, setDistricts] = useState<string[]>([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     phoneNum: "",
@@ -23,11 +24,31 @@ export default function SignUpPage() {
     district: "",
   })
 
-  // Get unique cities
-  const cities = locations.map(loc => loc.city)
+  // Predefined cities (you can also fetch these from API if needed)
+  const cities = ["서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시", "울산광역시", "세종특별자치시"]
 
-  // Get districts for selected city
-  const districts = locations.find(loc => loc.city === formData.city)?.districts || []
+  useEffect(() => {
+    const fetchDistricts = async () => {
+      if (!formData.city) {
+        setDistricts([])
+        return
+      }
+      
+      try {
+        const response = await apiService.getAllDistricts()
+        // Filter districts by selected city if the API returns city-district mapping
+        setDistricts(response.districts || [])
+      } catch (error) {
+        console.error('Error fetching districts:', error)
+        // Fallback districts for Seoul
+        if (formData.city === "서울특별시") {
+          setDistricts(["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"])
+        }
+      }
+    }
+
+    fetchDistricts()
+  }, [formData.city])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,29 +62,25 @@ export default function SignUpPage() {
       return
     }
 
+    setIsSubmitting(true)
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          phoneNum: formData.phoneNum,
-          password: formData.password,
-          city: formData.city,
-          district: formData.district,
-        }),
+      const response = await apiService.signup({
+        name: formData.name,
+        phoneNum: formData.phoneNum,
+        password: formData.password,
+        city: formData.city,
+        district: formData.district,
       })
-
-      if (!response.ok) {
-        throw new Error("Signup failed")
-      }
-
-      const data = await response.json()
       
-      // Store user data in localStorage
-      localStorage.setItem('userData', JSON.stringify(data))
+      // Store tokens and user data if provided
+      if (response.accessToken && response.refreshToken) {
+        authManager.setTokens({
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken
+        })
+      }
+      
+      authManager.setUserData(response.user)
       
       toast({
         title: "회원가입 완료",
@@ -75,9 +92,11 @@ export default function SignUpPage() {
       console.error("Error signing up:", error)
       toast({
         title: "회원가입 실패",
-        description: "다시 시도해주세요",
+        description: error instanceof Error ? error.message : "다시 시도해주세요",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -96,13 +115,7 @@ export default function SignUpPage() {
     }))
   }
 
-  if (loading) {
-    return <div>Loading...</div>
-  }
 
-  if (error) {
-    return <div>Error: {typeof error === 'string' ? error : 'An error occurred'}</div>
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -199,8 +212,9 @@ export default function SignUpPage() {
             <Button
               type="submit"
               className="w-full"
+              disabled={isSubmitting}
             >
-              회원가입
+              {isSubmitting ? "회원가입 중..." : "회원가입"}
             </Button>
           </div>
         </form>

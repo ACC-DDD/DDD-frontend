@@ -7,11 +7,12 @@ import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LogOut, User, MapPin, Phone, Edit2, Save } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { apiService } from "../services/api"
+import { authManager } from "../utils/auth"
 
 interface UserData {
   username: string
@@ -38,26 +39,11 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const response = await fetch('/api/locations')
-        if (response.ok) {
-          const data = await response.json()
-          setLocations(data.map((item: any) => ({
-            value: item.label,
-            label: item.label
-          })))
-        } else {
-          // Fallback to basic locations if API fails
-          setLocations([
-            { value: "강남구", label: "강남구" },
-            { value: "송파구", label: "송파구" },
-            { value: "서초구", label: "서초구" },
-            { value: "마포구", label: "마포구" },
-            { value: "용산구", label: "용산구" },
-            { value: "중구", label: "중구" },
-            { value: "종로구", label: "종로구" },
-            { value: "성동구", label: "성동구" },
-          ])
-        }
+        const response = await apiService.getAllDistricts()
+        setLocations(response.districts.map((district: string) => ({
+          value: district,
+          label: district
+        })))
       } catch (error) {
         console.error('Error fetching locations:', error)
         // Fallback to basic locations
@@ -80,14 +66,40 @@ export default function ProfilePage() {
   }, [])
 
   useEffect(() => {
-    const storedData = localStorage.getItem('userData')
-    if (storedData) {
-      const data = JSON.parse(storedData)
-      setUserData(data)
-      setEditedData(data)
-    } else {
-      router.push('/signup')
+    const fetchUserData = async () => {
+      if (!authManager.isAuthenticated()) {
+        router.push('/login')
+        return
+      }
+
+      try {
+        const response = await apiService.getMyProfile()
+        const userData = {
+          username: response.name,
+          phoneNumber: response.phoneNum,
+          location: response.district || response.city || ''
+        }
+        setUserData(userData)
+        setEditedData(userData)
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+        // Fallback to stored data
+        const storedData = authManager.getUserData()
+        if (storedData) {
+          const userData = {
+            username: storedData.name,
+            phoneNumber: storedData.phoneNum,
+            location: storedData.district || storedData.city || ''
+          }
+          setUserData(userData)
+          setEditedData(userData)
+        } else {
+          router.push('/login')
+        }
+      }
     }
+
+    fetchUserData()
   }, [router])
 
   const validatePhoneNumber = (phone: string) => {
@@ -129,34 +141,34 @@ export default function ProfilePage() {
     }
 
     try {
-      const response = await fetch('/api/members/me', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: editedData.username,
-          phoneNum: editedData.phoneNumber,
-          location: editedData.location
-        })
+      await apiService.updateMyProfile({
+        name: editedData.username,
+        phoneNum: editedData.phoneNumber,
+        district: editedData.location
       })
 
-      if (response.ok) {
-        localStorage.setItem('userData', JSON.stringify(editedData))
-        setUserData(editedData)
-        setIsEditing(false)
-        toast({
-          title: "프로필 수정 완료",
-          description: "프로필이 성공적으로 수정되었습니다.",
+      // Update stored user data
+      const currentUserData = authManager.getUserData()
+      if (currentUserData) {
+        authManager.setUserData({
+          ...currentUserData,
+          name: editedData.username,
+          phoneNum: editedData.phoneNumber,
+          district: editedData.location
         })
-      } else {
-        throw new Error('Failed to update profile')
       }
+
+      setUserData(editedData)
+      setIsEditing(false)
+      toast({
+        title: "프로필 수정 완료",
+        description: "프로필이 성공적으로 수정되었습니다.",
+      })
     } catch (error) {
       console.error('Error updating profile:', error)
       toast({
         title: "프로필 수정 실패",
-        description: "프로필 수정 중 오류가 발생했습니다.",
+        description: error instanceof Error ? error.message : "프로필 수정 중 오류가 발생했습니다.",
         variant: "destructive",
       })
     }
@@ -164,22 +176,20 @@ export default function ProfilePage() {
 
   const handleSignOut = async () => {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+      await authManager.logout()
+      toast({
+        title: "로그아웃 완료",
+        description: "로그아웃되었습니다.",
       })
+      router.push('/')
     } catch (error) {
       console.error('Error during logout:', error)
+      toast({
+        title: "로그아웃 실패",
+        description: "로그아웃 중 오류가 발생했습니다.",
+        variant: "destructive",
+      })
     }
-
-    localStorage.removeItem('userData')
-    toast({
-      title: "로그아웃 완료",
-      description: "로그아웃되었습니다.",
-    })
-    router.push('/')
   }
 
   if (!userData || !editedData || loading) {

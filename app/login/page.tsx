@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import { apiService } from "../services/api"
+import { authManager } from "../utils/auth"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -14,38 +16,38 @@ export default function LoginPage() {
     phoneNum: "",
     password: "",
   })
+  const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsLoading(true)
+
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
+      const response = await apiService.login(formData.phoneNum, formData.password)
+
+      // Store tokens and user data
+      authManager.setTokens({
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken
       })
 
-      if (!response.ok) {
-        throw new Error("Login failed")
-      }
+      authManager.setUserData(response.user)
 
-      const data = await response.json()
-      localStorage.setItem('userData', JSON.stringify(data))
-      
       toast({
         title: "로그인 완료",
         description: "환영합니다!",
       })
-      
+
       router.push("/")
     } catch (error) {
       console.error("Error logging in:", error)
       toast({
         title: "로그인 실패",
-        description: "다시 시도해주세요",
+        description: error instanceof Error ? error.message : "다시 시도해주세요",
         variant: "destructive",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -86,8 +88,9 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full"
+              disabled={isLoading}
             >
-              로그인
+              {isLoading ? "로그인 중..." : "로그인"}
             </Button>
           </div>
         </form>
