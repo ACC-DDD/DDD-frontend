@@ -1,58 +1,48 @@
 // API service layer for backend integration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? '/api/proxy' // Use proxy in development to bypass CORS
+  : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://43.203.156.19:8080');
 
-// API Response Types
+// API Response Types based on Swagger documentation
 interface LoginResponse {
+    memberId: number;
+    name: string;
     accessToken: string;
     refreshToken: string;
-    user: {
-        id: string;
-        name: string;
-        phoneNum: string;
-        city?: string;
-        district?: string;
-        lat?: number;
-        lng?: number;
-    };
 }
 
 interface SignupResponse {
-    accessToken?: string;
-    refreshToken?: string;
-    user: {
-        id: string;
-        name: string;
-        phoneNum: string;
-        city: string;
-        district: string;
-    };
-    message?: string;
+    id: number;
+    name: string;
+    phoneNum: string;
+    city: string;
+    district: string;
+    detail?: string;
+    verified: boolean;
 }
 
 interface UserProfile {
-    id: string;
+    id: number;
     name: string;
     phoneNum: string;
     city?: string;
     district?: string;
-    lat?: number;
-    lng?: number;
-}
-
-interface DistrictsResponse {
-    districts: string[];
+    detail?: string;
+    verified: boolean;
 }
 
 interface CCTVData {
     id: string;
     name: string;
-    address: string;
-    lat: number;
-    lng: number;
     cctvUrl: string;
     city: string;
     district: string;
+    town?: string;
     status: boolean;
+}
+
+interface DistrictsResponse {
+    districts: string[];
 }
 
 class ApiService {
@@ -64,12 +54,61 @@ class ApiService {
         };
     }
 
-    private async handleResponse<T>(response: Response): Promise<T> {
+    private async handleResponse<T>(response: Response, originalRequest?: () => Promise<Response>): Promise<T> {
+        const responseData = await response.json().catch(() => ({}));
+        
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            // Handle 401 Unauthorized - attempt token refresh
+            if (response.status === 401 && originalRequest) {
+                console.log('🔄 Token expired, attempting refresh...');
+                const refreshToken = localStorage.getItem('refreshToken');
+                
+                if (refreshToken) {
+                    try {
+                        const refreshResponse = await fetch(`${API_BASE_URL}/members/auth/reissue`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ refreshToken })
+                        });
+                        
+                        if (refreshResponse.ok) {
+                            const refreshData = await refreshResponse.json();
+                            const newTokens = refreshData.success ? refreshData.data : refreshData;
+                            
+                            // Update tokens
+                            localStorage.setItem('accessToken', newTokens.accessToken);
+                            if (newTokens.refreshToken) {
+                                localStorage.setItem('refreshToken', newTokens.refreshToken);
+                            }
+                            
+                            console.log('✅ Token refreshed successfully, retrying original request...');
+                            
+                            // Retry original request with new token
+                            const retryResponse = await originalRequest();
+                            return this.handleResponse<T>(retryResponse);
+                        }
+                    } catch (refreshError) {
+                        console.error('❌ Token refresh failed:', refreshError);
+                        // Clear invalid tokens
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                        localStorage.removeItem('userData');
+                    }
+                }
+            }
+            
+            const errorMessage = responseData.message || `HTTP error! status: ${response.status}`;
+            console.error(`API Error (${response.status}):`, errorMessage);
+            throw new Error(errorMessage);
         }
-        return response.json();
+        
+        // Backend wraps all responses in {success, code, message, data} format
+        if (responseData.success && responseData.data !== undefined) {
+            return responseData.data;
+        }
+        
+        // Fallback for responses without data wrapper
+        return responseData;
     }
 
     // Member APIs
@@ -89,10 +128,19 @@ class ApiService {
         city: string;
         district: string;
     }): Promise<SignupResponse> {
+        const requestData = {
+            name: userData.name,
+            phoneNum: userData.phoneNum,
+            password: userData.password,
+            confirmPassword: userData.password, // Backend expects confirmPassword
+            city: userData.city,
+            district: userData.district
+        };
+        
         const response = await fetch(`${API_BASE_URL}/members/auth/signup`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(userData)
+            body: JSON.stringify(requestData)
         });
         return this.handleResponse<SignupResponse>(response);
     }
@@ -171,11 +219,13 @@ class ApiService {
 
     // CCTV APIs
     async getAllCCTVs(): Promise<CCTVData[]> {
-        const response = await fetch(`${API_BASE_URL}/cctvs`, {
+        const makeRequest = () => fetch(`${API_BASE_URL}/cctvs`, {
             method: 'GET',
             headers: this.getAuthHeaders()
         });
-        return this.handleResponse<CCTVData[]>(response);
+        
+        const response = await makeRequest();
+        return this.handleResponse<CCTVData[]>(response, makeRequest);
     }
 
     async createOrUpdateCCTV(cctvData: Partial<CCTVData>): Promise<CCTVData> {
@@ -238,12 +288,12 @@ class ApiService {
         return this.handleResponse<{ cctvUrl: string }>(response);
     }
 
-    async getAllDistricts(): Promise<DistrictsResponse> {
+    async getAllDistricts(): Promise<string[]> {
         const response = await fetch(`${API_BASE_URL}/cctvs/districts`, {
             method: 'GET',
             headers: this.getAuthHeaders()
         });
-        return this.handleResponse<DistrictsResponse>(response);
+        return this.handleResponse<string[]>(response);
     }
 
     async exportCCTVData() {

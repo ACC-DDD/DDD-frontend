@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Camera, User, LogOut } from "lucide-react"
+import { Camera, User, LogOut, RefreshCw, Database, Wifi } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -26,33 +26,64 @@ interface Location {
   cctvUrl: string
 }
 
-// Fetch CCTV locations from backend
+// Fetch CCTV locations from backend API endpoint /cctvs
 async function fetchCCTVLocations(): Promise<Location[]> {
-  console.log('🔄 Attempting to fetch CCTV data from backend...')
+  console.log('🔄 Attempting to fetch CCTV data from backend API /cctvs...')
   try {
     const response = await apiService.getAllCCTVs()
     console.log('✅ Successfully fetched CCTV data from backend:', response)
-    return response.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      address: item.address,
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lng),
-      detection: item.status === "disaster" ? "disaster" : "normal",
-      cctvUrl: item.cctvUrl
-    }))
+    console.log('📊 Number of CCTVs received:', Array.isArray(response) ? response.length : 0)
+
+    // Check if we have valid CCTV data
+    if (Array.isArray(response) && response.length > 0) {
+      const mappedLocations = response.map((item: any, index: number) => {
+        console.log(`🎥 Processing CCTV ${index + 1}:`, {
+          id: item.id,
+          name: item.name,
+          status: item.status,
+          city: item.city,
+          district: item.district,
+          latitude: item.latitude,
+          longitude: item.longitude
+        })
+
+        return {
+          id: parseInt(item.id) || Math.random(),
+          name: item.name || `CCTV ${item.id || index + 1}`,
+          address: `${item.city || ''} ${item.district || ''}`.trim() || '위치 정보 없음',
+          lat: parseFloat(item.latitude) || 37.5665, // Use latitude from backend
+          lng: parseFloat(item.longitude) || 126.9780, // Use longitude from backend
+          detection: (item.status === false ? "disaster" : "normal") as "normal" | "disaster", // false status means disaster
+          cctvUrl: item.cctvUrl || "/placeholder.jpg"
+        }
+      })
+
+      const disasterCount = mappedLocations.filter(loc => loc.detection === "disaster").length
+      const normalCount = mappedLocations.filter(loc => loc.detection === "normal").length
+
+      console.log(`📈 CCTV Status Summary:`)
+      console.log(`   🟢 Normal: ${normalCount}`)
+      console.log(`   🔴 Disaster: ${disasterCount}`)
+      console.log(`   📍 Total: ${mappedLocations.length}`)
+
+      return mappedLocations
+    } else {
+      console.log('⚠️ No CCTV data received from backend, using sample data...')
+      throw new Error('No CCTV data available from backend')
+    }
   } catch (error) {
     console.error('❌ Error fetching CCTV locations from backend:', error)
-    console.log('🔄 Using sample data as fallback...')
+    console.log('🔄 Using sample data as fallback (backend may require authentication)...')
+
     // Return sample data for testing when backend is not available
-    return [
+    const sampleData = [
       {
         id: 1,
         name: "강남역 CCTV (샘플)",
         address: "서울특별시 강남구 강남대로 396",
         lat: 37.4979,
         lng: 127.0276,
-        detection: "normal",
+        detection: "normal" as const,
         cctvUrl: "/placeholder.jpg"
       },
       {
@@ -61,16 +92,16 @@ async function fetchCCTVLocations(): Promise<Location[]> {
         address: "서울특별시 마포구 양화로 160",
         lat: 37.5563,
         lng: 126.9236,
-        detection: "normal",
+        detection: "normal" as const,
         cctvUrl: "/placeholder.jpg"
       },
       {
         id: 3,
-        name: "명동역 CCTV (샘플)",
+        name: "명동역 CCTV (샘플 - 재난)",
         address: "서울특별시 중구 명동길 26",
         lat: 37.5636,
         lng: 126.9834,
-        detection: "disaster",
+        detection: "disaster" as const,
         cctvUrl: "/placeholder.jpg"
       },
       {
@@ -79,7 +110,7 @@ async function fetchCCTVLocations(): Promise<Location[]> {
         address: "서울특별시 용산구 이태원로 177",
         lat: 37.5345,
         lng: 126.9945,
-        detection: "normal",
+        detection: "normal" as const,
         cctvUrl: "/placeholder.jpg"
       },
       {
@@ -88,10 +119,13 @@ async function fetchCCTVLocations(): Promise<Location[]> {
         address: "서울특별시 송파구 올림픽로 240",
         lat: 37.5133,
         lng: 127.1000,
-        detection: "normal",
+        detection: "normal" as const,
         cctvUrl: "/placeholder.jpg"
       }
     ]
+
+    console.log('📋 Sample data loaded:', sampleData.length, 'CCTVs')
+    return sampleData
   }
 }
 
@@ -111,29 +145,145 @@ export default function DisasterDetectionPage() {
   const [selectedCamera, setSelectedCamera] = useState<Location | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [locations, setLocations] = useState<Location[]>([])
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null)
+  const [isLoadingCCTV, setIsLoadingCCTV] = useState(false)
+  const [isUsingRealData, setIsUsingRealData] = useState(false)
 
   const handleSelectCamera = (location: Location) => {
     setSelectedCamera(location)
+  }
+
+  const loadCCTVData = async (showToast = false) => {
+    setIsLoadingCCTV(true)
+    try {
+      console.log('🔄 Loading CCTV data from backend API /cctvs...')
+      console.log('🔐 Authentication status:', authManager.isAuthenticated())
+
+      const response = await apiService.getAllCCTVs()
+
+      if (Array.isArray(response) && response.length > 0) {
+        // Successfully got real data from backend
+        setIsUsingRealData(true)
+        const mappedLocations = response.map((item: any, index: number) => ({
+          id: parseInt(item.id) || Math.random(),
+          name: item.name || `CCTV ${item.id || index + 1}`,
+          address: `${item.city || ''} ${item.district || ''}`.trim() || '위치 정보 없음',
+          lat: parseFloat(item.latitude) || 37.5665,
+          lng: parseFloat(item.longitude) || 126.9780,
+          detection: (item.status === false ? "disaster" : "normal") as "normal" | "disaster",
+          cctvUrl: item.cctvUrl || "/placeholder.jpg"
+        }))
+
+        setLocations(mappedLocations)
+
+        const disasterCount = mappedLocations.filter(loc => loc.detection === "disaster").length
+        console.log(`✅ Real CCTV data loaded: ${mappedLocations.length} total, ${disasterCount} disasters`)
+
+        if (showToast) {
+          toast({
+            title: "CCTV 데이터 업데이트 완료",
+            description: `${mappedLocations.length}개 CCTV 중 ${disasterCount}개 재난 감지`,
+          })
+        }
+      } else {
+        throw new Error('No CCTV data available')
+      }
+    } catch (error) {
+      console.error('❌ Failed to load real CCTV data:', error)
+      setIsUsingRealData(false)
+
+      // Check if it's an authentication error
+      const isAuthError = error instanceof Error && error.message.includes('인증에 실패했습니다')
+
+      // Use sample data as fallback
+      const sampleData = [
+        {
+          id: 1,
+          name: "강남역 CCTV (샘플)",
+          address: "서울특별시 강남구 강남대로 396",
+          lat: 37.4979,
+          lng: 127.0276,
+          detection: "normal" as const,
+          cctvUrl: "/placeholder.jpg"
+        },
+        {
+          id: 2,
+          name: "홍대입구역 CCTV (샘플)",
+          address: "서울특별시 마포구 양화로 160",
+          lat: 37.5563,
+          lng: 126.9236,
+          detection: "normal" as const,
+          cctvUrl: "/placeholder.jpg"
+        },
+        {
+          id: 3,
+          name: "명동역 CCTV (샘플 - 재난)",
+          address: "서울특별시 중구 명동길 26",
+          lat: 37.5636,
+          lng: 126.9834,
+          detection: "disaster" as const,
+          cctvUrl: "/placeholder.jpg"
+        },
+        {
+          id: 4,
+          name: "이태원역 CCTV (샘플)",
+          address: "서울특별시 용산구 이태원로 177",
+          lat: 37.5345,
+          lng: 126.9945,
+          detection: "normal" as const,
+          cctvUrl: "/placeholder.jpg"
+        },
+        {
+          id: 5,
+          name: "잠실역 CCTV (샘플)",
+          address: "서울특별시 송파구 올림픽로 240",
+          lat: 37.5133,
+          lng: 127.1000,
+          detection: "normal" as const,
+          cctvUrl: "/placeholder.jpg"
+        }
+      ]
+
+      setLocations(sampleData)
+      console.log('📋 Sample data loaded as fallback')
+
+      if (showToast) {
+        if (isAuthError) {
+          toast({
+            title: "인증이 필요합니다",
+            description: "실시간 CCTV 데이터를 보려면 로그인해주세요. 현재 샘플 데이터를 표시합니다.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "백엔드 연결 실패",
+            description: "샘플 데이터를 표시합니다. 잠시 후 다시 시도해주세요.",
+            variant: "destructive",
+          })
+        }
+      }
+    } finally {
+      setIsLoadingCCTV(false)
+    }
   }
 
   useEffect(() => {
     // Check authentication status
     const isAuthenticated = authManager.isAuthenticated()
     setIsLoggedIn(isAuthenticated)
-    
+
     if (isAuthenticated) {
       const userData = authManager.getUserData()
       if (userData && userData.lat && userData.lng) {
-        setUserLocation({ 
-          lat: userData.lat, 
-          lng: userData.lng 
+        setUserLocation({
+          lat: userData.lat,
+          lng: userData.lng
         })
       }
     }
 
-    // Fetch initial CCTV locations
-    fetchCCTVLocations().then(setLocations)
+    // Load initial CCTV data
+    loadCCTVData()
 
     const handleDisaster = (e: CustomEvent<{ locations: Location[] }>) => {
       setLocations(e.detail.locations)
@@ -179,18 +329,49 @@ export default function DisasterDetectionPage() {
         </div>
 
         <div className="absolute top-4 right-4 z-[1000] flex gap-2">
+          {/* CCTV Data Refresh Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadCCTVData(true)}
+            disabled={isLoadingCCTV}
+            className="flex items-center gap-2"
+            title={!isLoggedIn ? "로그인 후 실시간 데이터를 확인할 수 있습니다" : "CCTV 데이터 새로고침"}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingCCTV ? 'animate-spin' : ''}`} />
+            CCTV 새로고침
+          </Button>
+
+          {/* Data Source Indicator */}
+          <div className={`px-3 py-2 rounded-md text-xs font-medium flex items-center gap-2 ${isUsingRealData
+            ? 'bg-green-100 text-green-800 border border-green-200'
+            : 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+            }`}>
+            {isUsingRealData ? (
+              <>
+                <Database className="h-3 w-3" />
+                실시간 데이터
+              </>
+            ) : (
+              <>
+                <Wifi className="h-3 w-3" />
+                샘플 데이터
+              </>
+            )}
+          </div>
+
           {isLoggedIn ? (
             <>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => router.push('/profile')}
               >
                 <User className="h-4 w-4" />
                 프로필
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="flex items-center gap-2"
                 onClick={handleSignOut}
               >
@@ -200,14 +381,14 @@ export default function DisasterDetectionPage() {
             </>
           ) : (
             <>
-              <Button 
+              <Button
                 variant="outline"
                 className="flex items-center gap-2"
                 onClick={() => router.push('/login')}
               >
                 로그인
               </Button>
-              <Button 
+              <Button
                 className="font-semibold"
                 onClick={() => router.push('/signup')}
               >

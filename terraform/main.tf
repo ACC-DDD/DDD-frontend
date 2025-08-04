@@ -37,7 +37,7 @@ variable "cloudfront_distribution_id" {
 variable "backend_api_url" {
   description = "Backend API URL"
   type        = string
-  default     = "https://your-backend-api-url.com"
+  default     = "http://43.203.156.19:8080"
 }
 
 # Data source to get existing S3 bucket

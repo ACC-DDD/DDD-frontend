@@ -57,8 +57,8 @@ export default function SignUpPage() {
       try {
         const response = await apiService.getAllDistricts()
         console.log('✅ Successfully fetched districts from backend:', response)
-        // Filter districts by selected city if the API returns city-district mapping
-        setDistricts(response.districts || [])
+        // Backend returns array of strings directly
+        setDistricts(response || [])
       } catch (error) {
         console.error('❌ Error fetching districts from backend:', error)
         console.log(`🔄 Using predefined districts for ${formData.city}...`)
@@ -92,15 +92,14 @@ export default function SignUpPage() {
         district: formData.district,
       })
 
-      // Store tokens and user data if provided
-      if (response.accessToken && response.refreshToken) {
-        authManager.setTokens({
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken
-        })
-      }
-
-      authManager.setUserData(response.user)
+      // Store user data (signup doesn't return tokens, user needs to login)
+      authManager.setUserData({
+        id: response.id.toString(),
+        name: response.name,
+        phoneNum: response.phoneNum,
+        city: response.city,
+        district: response.district
+      })
 
       toast({
         title: "회원가입 완료",

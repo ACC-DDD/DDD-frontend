@@ -4,4 +4,4 @@
 aws_region = "ap-northeast-2"
 bucket_name = "ddd-acc-next-frontend"
 cloudfront_distribution_id = "your-actual-cloudfront-distribution-id"
-backend_api_url = "https://your-backend-api-url.com"
+backend_api_url = "http://43.203.156.19:8080"

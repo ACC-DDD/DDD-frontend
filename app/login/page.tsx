@@ -33,7 +33,11 @@ export default function LoginPage() {
         refreshToken: response.refreshToken
       })
 
-      authManager.setUserData(response.user)
+      authManager.setUserData({
+        id: response.memberId.toString(),
+        name: response.name,
+        phoneNum: formData.phoneNum // Backend doesn't return phoneNum in login response
+      })
 
       toast({
         title: "로그인 완료",

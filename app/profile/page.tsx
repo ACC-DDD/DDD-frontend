@@ -40,7 +40,7 @@ export default function ProfilePage() {
     const fetchLocations = async () => {
       try {
         const response = await apiService.getAllDistricts()
-        setLocations(response.districts.map((district: string) => ({
+        setLocations(response.map((district: string) => ({
           value: district,
           label: district
         })))

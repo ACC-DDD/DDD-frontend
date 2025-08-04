@@ -1,10 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Enable static export for S3 deployment
-  output: 'export',
-  distDir: 'out',
-  trailingSlash: true,
-  
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -12,14 +7,19 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   
-  // Disable image optimization for static export
-  images: {
-    unoptimized: true,
-  },
-  
   // 실험적 기능 비활성화 (안정성을 위해)
   experimental: {
     esmExternals: false,
+  },
+  
+  // Add rewrites for API proxy to bypass CORS during development
+  async rewrites() {
+    return [
+      {
+        source: '/api/proxy/:path*',
+        destination: 'http://43.203.156.19:8080/:path*',
+      },
+    ]
   },
   
   env: {

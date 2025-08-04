@@ -12,12 +12,10 @@ import { authManager } from "../utils/auth"
 interface CCTV {
     id: string
     name: string
-    address: string
-    lat: number
-    lng: number
     cctvUrl: string
     city: string
     district: string
+    town?: string
     status: boolean
 }
 
@@ -57,7 +55,7 @@ export default function AdminPage() {
     const fetchDistricts = async () => {
         try {
             const response = await apiService.getAllDistricts()
-            setDistricts(response.districts || [])
+            setDistricts(response)
         } catch (error) {
             console.error('Error fetching districts:', error)
         }
@@ -218,7 +216,7 @@ export default function AdminPage() {
                                         <tr key={cctv.id} className="hover:bg-gray-50">
                                             <td className="border border-gray-300 px-4 py-2">{cctv.id}</td>
                                             <td className="border border-gray-300 px-4 py-2">{cctv.name}</td>
-                                            <td className="border border-gray-300 px-4 py-2">{cctv.address}</td>
+                                            <td className="border border-gray-300 px-4 py-2">{cctv.town || '-'}</td>
                                             <td className="border border-gray-300 px-4 py-2">{cctv.city}</td>
                                             <td className="border border-gray-300 px-4 py-2">{cctv.district}</td>
                                             <td className="border border-gray-300 px-4 py-2">
