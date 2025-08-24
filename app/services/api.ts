@@ -3,6 +3,21 @@ const API_BASE_URL = process.env.NODE_ENV === 'development'
   ? '/api/proxy' // Use proxy in development to bypass CORS
   : (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://43.203.156.19:8080');
 
+// Add timeout to fetch requests
+const FETCH_TIMEOUT = 10000; // 10 seconds
+
+function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  
+  return fetch(url, {
+    ...options,
+    signal: controller.signal
+  }).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
 // API Response Types based on Swagger documentation
 interface LoginResponse {
     memberId: number;
@@ -219,13 +234,25 @@ class ApiService {
 
     // CCTV APIs
     async getAllCCTVs(): Promise<CCTVData[]> {
-        const makeRequest = () => fetch(`${API_BASE_URL}/cctvs`, {
+        const makeRequest = () => fetchWithTimeout(`${API_BASE_URL}/cctvs`, {
             method: 'GET',
             headers: this.getAuthHeaders()
         });
         
-        const response = await makeRequest();
-        return this.handleResponse<CCTVData[]>(response, makeRequest);
+        try {
+            const response = await makeRequest();
+            return this.handleResponse<CCTVData[]>(response, makeRequest);
+        } catch (error) {
+            if (error instanceof Error) {
+                if (error.name === 'AbortError') {
+                    throw new Error('백엔드 서버 연결 시간 초과 (10초). 서버가 응답하지 않습니다.');
+                }
+                if (error.message.includes('ETIMEDOUT') || error.message.includes('timeout')) {
+                    throw new Error('백엔드 서버에 연결할 수 없습니다. 서버가 다운되었거나 네트워크 문제가 있습니다.');
+                }
+            }
+            throw error;
+        }
     }
 
     async createOrUpdateCCTV(cctvData: Partial<CCTVData>): Promise<CCTVData> {

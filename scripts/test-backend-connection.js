@@ -1,153 +1,148 @@
 #!/usr/bin/env node
 
-// Simple Node.js script to test backend connection
-const https = require('https');
+// Test script to check backend connection
+require('dotenv').config({ path: '.env.local' });
 const http = require('http');
 
-const BACKEND_URL = 'http://43.203.156.19:8080';
+const BACKEND_URL = process.env.API_BASE_URL || 'http://43.203.156.19:8080';
+const TEST_TOKEN = process.env.TEST_TOKEN;
 
-// Colors for console output
-const colors = {
-  red: '\x1b[31m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  reset: '\x1b[0m'
-};
+console.log('🔍 Testing backend connection...');
+console.log('🌐 Backend URL:', BACKEND_URL);
+console.log('🔑 Using test token for member ID 3');
+console.log('📱 Phone: 010-8888-7777');
+console.log('');
 
-function log(color, message) {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-}
-
-// Test function
-async function testEndpoint(path, method = 'GET', data = null) {
+// Test basic connectivity
+function testConnection() {
   return new Promise((resolve, reject) => {
-    const url = new URL(path, BACKEND_URL);
+    const url = new URL(BACKEND_URL + '/cctvs');
+
     const options = {
       hostname: url.hostname,
       port: url.port,
-      path: url.pathname + url.search,
-      method: method,
+      path: url.pathname,
+      method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Frontend-Test-Script/1.0'
+        'Authorization': `Bearer ${TEST_TOKEN}`
       },
-      timeout: 10000 // 10 second timeout
+      timeout: 10000 // 10 seconds timeout
     };
 
-    const client = url.protocol === 'https:' ? https : http;
-    
-    const req = client.request(options, (res) => {
-      let responseData = '';
-      
+    const req = http.request(options, (res) => {
+      console.log('✅ Connection successful!');
+      console.log('📊 Status Code:', res.statusCode);
+      console.log('📋 Headers:', res.headers);
+
+      let data = '';
       res.on('data', (chunk) => {
-        responseData += chunk;
+        data += chunk;
       });
-      
+
       res.on('end', () => {
         try {
-          const parsedData = responseData ? JSON.parse(responseData) : {};
-          resolve({
-            status: res.statusCode,
-            headers: res.headers,
-            data: parsedData
-          });
+          const jsonData = JSON.parse(data);
+          console.log('📦 Response Data:', JSON.stringify(jsonData, null, 2));
+          resolve({ status: res.statusCode, data: jsonData });
         } catch (e) {
-          resolve({
-            status: res.statusCode,
-            headers: res.headers,
-            data: responseData
-          });
+          console.log('📄 Raw Response:', data);
+          resolve({ status: res.statusCode, data: data });
         }
       });
     });
 
     req.on('error', (error) => {
+      console.error('❌ Connection failed:', error.message);
+      if (error.code === 'ETIMEDOUT') {
+        console.error('⏰ Connection timed out - server may be down');
+      } else if (error.code === 'ECONNREFUSED') {
+        console.error('🚫 Connection refused - server is not accepting connections');
+      } else if (error.code === 'ENOTFOUND') {
+        console.error('🔍 Host not found - check the IP address');
+      }
       reject(error);
     });
 
     req.on('timeout', () => {
+      console.error('⏰ Request timed out after 10 seconds');
       req.destroy();
       reject(new Error('Request timeout'));
     });
 
-    if (data) {
-      req.write(JSON.stringify(data));
-    }
-    
     req.end();
   });
 }
 
-// Main test function
+// Test without authentication
+function testWithoutAuth() {
+  return new Promise((resolve, reject) => {
+    const url = new URL(BACKEND_URL + '/cctvs');
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    };
+
+    console.log('🔓 Testing without authentication...');
+
+    const req = http.request(options, (res) => {
+      console.log('📊 Status Code (no auth):', res.statusCode);
+
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        console.log('📄 Response (no auth):', data.substring(0, 200) + '...');
+        resolve({ status: res.statusCode, data: data });
+      });
+    });
+
+    req.on('error', (error) => {
+      console.error('❌ No-auth test failed:', error.message);
+      reject(error);
+    });
+
+    req.on('timeout', () => {
+      console.error('⏰ No-auth test timed out');
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
+// Run tests
 async function runTests() {
-  log('blue', '🚀 Starting Backend Connection Tests...');
-  log('yellow', `📡 Testing connection to: ${BACKEND_URL}`);
-  console.log('');
+  try {
+    console.log('='.repeat(50));
+    console.log('🧪 Test 1: Connection with authentication');
+    console.log('='.repeat(50));
+    await testConnection();
 
-  const tests = [
-    {
-      name: 'Health Check',
-      path: '/health',
-      description: 'Basic server health check'
-    },
-    {
-      name: 'CCTV Data',
-      path: '/cctvs',
-      description: 'Fetch CCTV locations'
-    },
-    {
-      name: 'Districts Data',
-      path: '/cctvs/districts',
-      description: 'Fetch district information'
-    },
-    {
-      name: 'Root Endpoint',
-      path: '/',
-      description: 'Test root endpoint'
-    }
-  ];
+    console.log('\n' + '='.repeat(50));
+    console.log('🧪 Test 2: Connection without authentication');
+    console.log('='.repeat(50));
+    await testWithoutAuth();
 
-  let successCount = 0;
-  let totalTests = tests.length;
-
-  for (const test of tests) {
-    try {
-      log('yellow', `🔄 Testing: ${test.name} (${test.path})`);
-      
-      const result = await testEndpoint(test.path);
-      
-      if (result.status >= 200 && result.status < 400) {
-        log('green', `✅ ${test.name}: SUCCESS (Status: ${result.status})`);
-        if (result.data && typeof result.data === 'object') {
-          console.log(`   📊 Response data preview:`, JSON.stringify(result.data).substring(0, 100) + '...');
-        }
-        successCount++;
-      } else {
-        log('red', `❌ ${test.name}: FAILED (Status: ${result.status})`);
-        console.log(`   📄 Response:`, result.data);
-      }
-    } catch (error) {
-      log('red', `❌ ${test.name}: ERROR - ${error.message}`);
-    }
-    console.log('');
-  }
-
-  // Summary
-  log('blue', '📋 Test Summary:');
-  log(successCount === totalTests ? 'green' : 'yellow', `✅ Successful: ${successCount}/${totalTests}`);
-  log(successCount < totalTests ? 'red' : 'green', `❌ Failed: ${totalTests - successCount}/${totalTests}`);
-  
-  if (successCount > 0) {
-    log('green', '🎉 Backend is reachable! Your frontend should be able to connect.');
-  } else {
-    log('red', '⚠️  Backend connection failed. Please check:');
-    console.log('   1. Backend server is running');
-    console.log('   2. Backend URL is correct');
-    console.log('   3. Network connectivity');
-    console.log('   4. CORS settings on backend');
+  } catch (error) {
+    console.error('\n💥 All tests failed. Backend server appears to be down.');
+    console.log('\n🔧 Possible solutions:');
+    console.log('1. Check if the backend server is running');
+    console.log('2. Verify the IP address: 43.203.156.19');
+    console.log('3. Check if port 8080 is open');
+    console.log('4. Test from a different network');
+    console.log('5. Contact the backend team');
   }
 }
 
-// Run the tests
-runTests().catch(console.error);
+runTests();

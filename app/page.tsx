@@ -129,12 +129,28 @@ async function fetchCCTVLocations(): Promise<Location[]> {
   }
 }
 
-// Dynamic import for the map components
-const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
+// Dynamic import for the map components with better error handling and timeout
+const MapWithNoSSR = dynamic(() => import('@/components/Map').catch(() => {
+  // Fallback component if map fails to load
+  return {
+    default: () => (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <div className="text-center p-4">
+          <p className="text-red-500 mb-2">지도를 불러올 수 없습니다</p>
+          <Button onClick={() => window.location.reload()}>페이지 새로고침</Button>
+        </div>
+      </div>
+    )
+  }
+}), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-gray-100">
-      <p className="text-gray-500">지도를 불러오는 중...</p>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p className="text-gray-500">지도를 불러오는 중...</p>
+        <p className="text-xs text-gray-400 mt-2">잠시만 기다려주세요</p>
+      </div>
     </div>
   ),
 })
@@ -158,8 +174,16 @@ export default function DisasterDetectionPage() {
     try {
       console.log('🔄 Loading CCTV data from backend API /cctvs...')
       console.log('🔐 Authentication status:', authManager.isAuthenticated())
+      console.log('🔑 Access token:', localStorage.getItem('accessToken')?.substring(0, 50) + '...')
 
       const response = await apiService.getAllCCTVs()
+
+      // Enhanced debugging
+      console.log('🔍 Raw API Response:', response)
+      console.log('🔍 Response type:', typeof response)
+      console.log('🔍 Is Array?', Array.isArray(response))
+      console.log('🔍 Response length:', Array.isArray(response) ? response.length : 'Not an array')
+      console.log('🔍 Response keys:', response ? Object.keys(response) : 'No response')
 
       if (Array.isArray(response) && response.length > 0) {
         // Successfully got real data from backend
@@ -254,6 +278,12 @@ export default function DisasterDetectionPage() {
             description: "실시간 CCTV 데이터를 보려면 로그인해주세요. 현재 샘플 데이터를 표시합니다.",
             variant: "destructive",
           })
+        } else if (error instanceof Error && error.message.includes('시간 초과')) {
+          toast({
+            title: "백엔드 서버 연결 실패",
+            description: "서버가 응답하지 않습니다. 샘플 데이터를 표시합니다.",
+            variant: "destructive",
+          })
         } else {
           toast({
             title: "백엔드 연결 실패",
@@ -329,6 +359,34 @@ export default function DisasterDetectionPage() {
         </div>
 
         <div className="absolute top-4 right-4 z-[1000] flex gap-2">
+          {/* Test Token Button - for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                const testToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMTAtODg4OC03Nzc3IiwibWVtYmVySWQiOjMsImlhdCI6MTc1NDYyNjQ1NywiZXhwIjoxNzYyNDAyNDU3fQ.y9ExgN4srrD_q6YlrhlHegwjw5s8B5dWoi9I1lZxtGg";
+                localStorage.setItem('accessToken', testToken);
+                localStorage.setItem('userData', JSON.stringify({
+                  id: "3",
+                  name: "Test User",
+                  phoneNum: "010-8888-7777",
+                  city: "서울특별시",
+                  district: "강남구"
+                }));
+                setIsLoggedIn(true);
+                toast({
+                  title: "테스트 토큰 설정 완료",
+                  description: "Member ID 3 토큰으로 로그인되었습니다.",
+                });
+                loadCCTVData(true);
+              }}
+              className="flex items-center gap-2"
+            >
+              🔑 테스트 토큰
+            </Button>
+          )}
+
           {/* CCTV Data Refresh Button */}
           <Button
             variant="outline"

@@ -198,10 +198,10 @@ export default function DisasterSimulationPage() {
                       <p>
                         <span className="font-medium">유형:</span>
                         <span className={`ml-1 px-2 py-0.5 rounded text-xs font-medium ${location.type === '화재' ? 'bg-red-100 text-red-700' :
-                            location.type === '지진' ? 'bg-orange-100 text-orange-700' :
-                              location.type === '홍수' ? 'bg-blue-100 text-blue-700' :
-                                location.type === '가스누출' ? 'bg-purple-100 text-purple-700' :
-                                  'bg-red-100 text-red-700'
+                          location.type === '지진' ? 'bg-orange-100 text-orange-700' :
+                            location.type === '홍수' ? 'bg-blue-100 text-blue-700' :
+                              location.type === '가스누출' ? 'bg-purple-100 text-purple-700' :
+                                'bg-red-100 text-red-700'
                           }`}>
                           {location.type}
                         </span>
